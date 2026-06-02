@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html lang="es" data-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Saint Contable - Sistema de Contabilidad Empresarial</title>
+  <link rel="stylesheet" href="styles.css">
+  
+  <!-- CDN de librerías para Reportes, Iconos y Gráficos -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+</head>
+<body>
+
+  <!-- Contenedor Principal de la Aplicación -->
+  <div id="app-container">
+    
+    <!-- PANTALLA DE INICIO DE SESIÓN -->
+    <div id="login-screen">
+      <div class="login-card">
+        <div class="login-logo">
+          <i data-lucide="calculator"></i>
+          <h1>Saint Contable</h1>
+        </div>
+        <form id="login-form">
+          <div class="form-group">
+            <label for="username">Nombre de Usuario</label>
+            <div class="input-wrapper">
+              <i data-lucide="user"></i>
+              <input type="text" id="username" class="form-input" placeholder="Ej: admin o contador" required autocomplete="username">
+            </div>
+          </div>
+          <div class="form-group">
+            <label for="password">Contraseña</label>
+            <div class="input-wrapper">
+              <i data-lucide="lock"></i>
+              <input type="password" id="password" class="form-input" placeholder="••••••••" required autocomplete="current-password">
+            </div>
+          </div>
+          <button type="submit" class="btn-primary" style="margin-top: 1.5rem;">
+            <span>Iniciar Sesión</span>
+            <i data-lucide="log-in"></i>
+          </button>
+        </form>
+        <div style="margin-top: 1.5rem; text-align: center; font-size: 0.8rem; color: var(--text-muted);">
+          <span>Usuarios demo: <b>admin</b> (123) / <b>contador</b> (123)</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- VISTA PRINCIPAL DEL SISTEMA (LAYOUT CON SIDEBAR) -->
+    <div id="main-layout" style="display: none; width: 100%;">
+      
+      <!-- MENÚ LATERAL (SIDEBAR) -->
+      <aside class="sidebar">
+        <div class="sidebar-brand">
+          <i data-lucide="calculator"></i>
+          <span>Saint Contable</span>
+        </div>
+        
+        <nav style="flex-grow: 1;">
+          <ul class="sidebar-menu">
+            <li class="menu-item active" data-view="dashboard">
+              <a href="#dashboard"><i data-lucide="layout-dashboard"></i><span>Dashboard</span></a>
+            </li>
+            <li class="menu-item" data-view="plan-cuentas">
+              <a href="#plan-cuentas"><i data-lucide="git-branch"></i><span>Plan de Cuentas</span></a>
+            </li>
+            <li class="menu-item" data-view="asientos">
+              <a href="#asientos"><i data-lucide="book-open"></i><span>Asientos Contables</span></a>
+            </li>
+            <li class="menu-item" data-view="libro-diario">
+              <a href="#libro-diario"><i data-lucide="list-ordered"></i><span>Libro Diario</span></a>
+            </li>
+            <li class="menu-item" data-view="mayor-analitico">
+              <a href="#mayor-analitico"><i data-lucide="activity"></i><span>Mayor Analítico</span></a>
+            </li>
+            <li class="menu-item" data-view="balance-general">
+              <a href="#balance-general"><i data-lucide="scale"></i><span>Balance General</span></a>
+            </li>
+            <li class="menu-item" data-view="estado-resultados">
+              <a href="#estado-resultados"><i data-lucide="trending-up"></i><span>Estado de Resultados</span></a>
+            </li>
+            <li class="menu-item" data-view="auditoria">
+              <a href="#auditoria"><i data-lucide="history"></i><span>Auditoría</span></a>
+            </li>
+            <li class="menu-item" data-view="configuracion">
+              <a href="#configuracion"><i data-lucide="settings"></i><span>Configuración</span></a>
+            </li>
+          </ul>
+        </nav>
+        
+        <div class="sidebar-footer">
+          <div class="user-profile">
+            <div class="user-avatar" id="avatar-initials">AD</div>
+            <div class="user-info">
+              <h4 id="user-display-name">Administrador</h4>
+              <p id="user-display-role">Administrador</p>
+            </div>
+          </div>
+          <button id="theme-toggle" class="theme-toggle-btn">
+            <i data-lucide="sun" id="theme-icon"></i>
+            <span id="theme-text">Modo Claro</span>
+          </button>
+          <button id="logout-button" class="logout-btn">
+            <i data-lucide="log-out"></i>
+            <span>Cerrar Sesión</span>
+          </button>
+        </div>
+      </aside>
+
+      <!-- ÁREA DE CONTENIDO -->
+      <main class="content-area">
+        
+        <!-- BARRA SUPERIOR -->
+        <header class="top-bar">
+          <div class="company-meta">
+            <h2 id="top-company-name">Cargando empresa...</h2>
+            <p id="top-company-rif">RIF: -</p>
+          </div>
+          <div class="system-status">
+            <span>Período Activo: <b id="top-fiscal-year">2026</b></span>
+          </div>
+        </header>
+
+        <!-- CONTENEDOR DINÁMICO DE VISTAS -->
+        <div id="views-content">
+          <!-- El contenido de las diferentes pestañas se cargará aquí mediante JS -->
+        </div>
+
+      </main>
+
+    </div>
+
+  </div>
+
+  <!-- MODAL GENERAL PARA CREAR/EDITAR CUENTA CONTABLE -->
+  <div id="account-modal" class="modal-overlay">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3 id="account-modal-title">Nueva Cuenta Contable</h3>
+        <button class="modal-close-btn" onclick="closeAccountModal()"><i data-lucide="x"></i></button>
+      </div>
+      <form id="account-form">
+        <div class="modal-body">
+          <input type="hidden" id="acc-edit-mode">
+          
+          <div class="form-group">
+            <label for="acc-code">Código Contable *</label>
+            <input type="text" id="acc-code" class="form-input" style="padding-left: 0.75rem;" placeholder="Ej: 1.1.01.005" required>
+          </div>
+          
+          <div class="form-group">
+            <label for="acc-name">Nombre de la Cuenta *</label>
+            <input type="text" id="acc-name" class="form-input" style="padding-left: 0.75rem;" placeholder="Ej: Banco Provincial" required>
+          </div>
+
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+            <div class="form-group">
+              <label for="acc-type">Clasificación *</label>
+              <select id="acc-type" class="form-input" style="padding-left: 0.75rem;" required>
+                <option value="Activo">Activos</option>
+                <option value="Pasivo">Pasivos</option>
+                <option value="Patrimonio">Patrimonio</option>
+                <option value="Ingresos">Ingresos</option>
+                <option value="Gastos">Gastos</option>
+                <option value="Costos">Costos</option>
+              </select>
+            </div>
+            
+            <div class="form-group">
+              <label for="acc-nature">Naturaleza *</label>
+              <select id="acc-nature" class="form-input" style="padding-left: 0.75rem;" required>
+                <option value="Deudora">Deudora</option>
+                <option value="Acreedora">Acreedora</option>
+              </select>
+            </div>
+          </div>
+
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-top: 0.5rem;">
+            <div class="form-group" style="flex-direction: row; align-items: center; gap: 0.5rem;">
+              <input type="checkbox" id="acc-summary" style="width: 18px; height: 18px; cursor: pointer;">
+              <label for="acc-summary" style="cursor: pointer; margin-bottom: 0;">¿Es cuenta acumuladora?</label>
+            </div>
+            
+            <div class="form-group" style="flex-direction: row; align-items: center; gap: 0.5rem;">
+              <input type="checkbox" id="acc-active" checked style="width: 18px; height: 18px; cursor: pointer;">
+              <label for="acc-active" style="cursor: pointer; margin-bottom: 0;">Cuenta activa</label>
+            </div>
+          </div>
+          
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-sec" onclick="closeAccountModal()">Cancelar</button>
+          <button type="submit" class="btn btn-primary-action">Guardar Cuenta</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- MODAL GENERAL PARA CREAR/EDITAR ASIENTO CONTABLE -->
+  <div id="entry-modal" class="modal-overlay">
+    <div class="modal-content" style="max-width: 850px; width: 95%;">
+      <div class="modal-header">
+        <h3 id="entry-modal-title">Nuevo Asiento de Diario</h3>
+        <button class="modal-close-btn" onclick="closeEntryModal()"><i data-lucide="x"></i></button>
+      </div>
+      <form id="entry-form">
+        <div class="modal-body">
+          <input type="hidden" id="entry-id">
+          
+          <div style="display: grid; grid-template-columns: 1fr 2fr; gap: 1.25rem; margin-bottom: 1.25rem;">
+            <div class="form-group">
+              <label for="entry-date">Fecha Contable *</label>
+              <input type="date" id="entry-date" class="form-input" style="padding-left: 0.75rem;" required>
+            </div>
+            <div class="form-group">
+              <label for="entry-description">Concepto o Descripción General *</label>
+              <input type="text" id="entry-description" class="form-input" style="padding-left: 0.75rem;" placeholder="Ej: Registro de ventas según facturas del día..." required>
+            </div>
+          </div>
+
+          <div class="card-title" style="margin-bottom: 0.5rem; font-size: 0.95rem;">
+            <span>Detalle de Partida Doble</span>
+            <button type="button" class="btn btn-sec" style="padding: 0.35rem 0.75rem; font-size: 0.8rem;" onclick="addEntryLineRow()">
+              <i data-lucide="plus" style="width: 14px; height: 14px;"></i> Agregar Línea
+            </button>
+          </div>
+
+          <div class="table-responsive" style="max-height: 280px;">
+            <table class="table-data entry-lines-table">
+              <thead>
+                <tr>
+                  <th style="width: 45%;">Cuenta Contable de Detalle</th>
+                  <th style="width: 25%; text-align: right;">Debe (+)</th>
+                  <th style="width: 25%; text-align: right;">Haber (-)</th>
+                  <th style="width: 5%; text-align: center;">Acciones</th>
+                </tr>
+              </thead>
+              <tbody id="entry-lines-tbody">
+                <!-- Líneas cargadas dinámicamente -->
+              </tbody>
+            </table>
+          </div>
+
+          <div style="display: grid; grid-template-columns: 2fr 1fr 1fr; gap: 1rem; margin-top: 1rem; padding: 0.75rem; background: var(--bg-gradient-end); border-radius: var(--radius-sm); align-items: center;">
+            <span style="font-weight: 700; text-align: right;">Totales Balanceados:</span>
+            <span id="entry-total-debit" style="font-weight: 700; text-align: right; color: var(--primary-color);">0.00</span>
+            <span id="entry-total-credit" style="font-weight: 700; text-align: right; color: var(--primary-color);">0.00</span>
+          </div>
+          
+          <div id="entry-balance-warning" style="display: none; margin-top: 0.75rem; text-align: center; color: var(--danger-color); font-size: 0.85rem; font-weight: 600;">
+            <i data-lucide="alert-triangle" style="width: 14px; height: 14px; display: inline; vertical-align: text-bottom; margin-right: 0.25rem;"></i>
+            El asiento no está balanceado por partida doble. La diferencia es de <span id="entry-balance-diff">0.00</span>.
+          </div>
+          
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-sec" onclick="closeEntryModal()">Cancelar</button>
+          <button type="submit" class="btn btn-primary-action" id="btn-save-entry-submit">Registrar Asiento</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- CONTENEDOR DE NOTIFICACIONES TOAST -->
+  <div id="toast-container"></div>
+
+  <!-- ARCHIVOS JAVASCRIPT DE LA APLICACIÓN -->
+  <script src="database.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
