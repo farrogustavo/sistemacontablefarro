@@ -19,6 +19,29 @@ const AppState = {
 // Inicialización de la aplicación al cargar el DOM
 document.addEventListener('DOMContentLoaded', () => {
   db.init();
+
+  // Migración: actualizar nombre antiguo de empresa demo si aún existe
+  (function migrarNombreEmpresa() {
+    const settings = db.getSettings();
+    if (settings && settings.companyName === 'Saint Contable Demo S.A.') {
+      settings.companyName = 'Sistema Contable Farro F.P';
+      db.setData('saint_settings', settings);
+    }
+    const companies = db.getCompanies();
+    let migrated = false;
+    companies.forEach(c => {
+      if (c.razonSocial === 'Saint Contable Demo S.A.') {
+        c.razonSocial = 'Sistema Contable Farro F.P';
+        c.nombreComercial = 'Farro F.P';
+        c.tipoEmpresa = 'Autónomo';
+        migrated = true;
+      }
+    });
+    if (migrated) {
+      localStorage.setItem('saint_companies', JSON.stringify(companies));
+    }
+  })();
+
   AppState.settings = db.getSettings();
   
   // Registrar eventos globales
@@ -207,6 +230,9 @@ function renderView(view) {
       break;
     case 'auditoria':
       renderAuditoriaView(container);
+      break;
+    case 'empresas':
+      renderEmpresasView(container);
       break;
     case 'configuracion':
       renderConfiguracionView(container);
@@ -1696,7 +1722,178 @@ function renderAuditoriaView(container) {
   `;
 }
 
-// 9. CONFIGURACIÓN
+// 9. EMPRESAS
+function renderEmpresasView(container) {
+  const companies = db.getCompanies();
+  const activeId = db.getActiveCompanyId();
+
+  let companiesRows = '';
+  companies.forEach(c => {
+    const isActive = c.id === activeId;
+    const badge = isActive 
+      ? '<span class="badge badge-success">Activa</span>' 
+      : '<span class="badge badge-warning" style="cursor:pointer;" onclick="handleSwitchCompany(\'' + c.id + '\')">Activar</span>';
+    
+    companiesRows += `
+      <tr>
+        <td>
+          <div style="font-weight:700; color:var(--text-main);">${c.razonSocial}</div>
+          <div style="font-size:0.75rem; color:var(--text-muted);">${c.nombreComercial || 'Sin nombre comercial'}</div>
+        </td>
+        <td><small>${c.tipoEmpresa}</small></td>
+        <td><small>${c.ciudad}, ${c.pais}</small></td>
+        <td><code>${c.rif || ''}</code></td>
+        <td style="text-align: center;">${badge}</td>
+      </tr>
+    `;
+  });
+
+  container.innerHTML = `
+    <div class="view-container">
+      <div class="view-header">
+        <div>
+          <h1>Gestión de Empresas</h1>
+          <p>Crea nuevas empresas y alterna entre ellas para gestionar su contabilidad.</p>
+        </div>
+      </div>
+
+      <div class="content-grid-2x1">
+        <!-- Columna de Lista de Empresas -->
+        <div class="card" style="padding:0; display: flex; flex-direction: column;">
+          <div style="padding:1.25rem; border-bottom:1px solid var(--surface-border);">
+            <h3 style="font-size:1.05rem; font-weight:700;">Empresas Registradas</h3>
+          </div>
+          <div class="table-responsive" style="flex-grow: 1;">
+            <table class="table-data">
+              <thead>
+                <tr>
+                  <th style="width: 40%;">Razón Social / Comercial</th>
+                  <th style="width: 15%;">Tipo</th>
+                  <th style="width: 25%;">Ubicación</th>
+                  <th style="width: 10%;">ID Fiscal</th>
+                  <th style="width: 10%; text-align: center;">Estado</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${companiesRows || '<tr><td colspan="5" style="text-align:center; padding:2rem;">No hay empresas registradas</td></tr>'}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Columna de Registro de Nueva Empresa -->
+        <div class="card">
+          <div style="margin-bottom:1.25rem;">
+            <h3 style="font-size:1.05rem; font-weight:700; margin-bottom:0.25rem;">Crear Nueva Empresa</h3>
+            <p style="font-size:0.8rem; color:var(--text-muted);">Ingrese los datos fiscales y de ubicación de la empresa.</p>
+          </div>
+          <form id="create-company-form">
+            <div class="form-group">
+              <label for="emp-razon-social">Razón Social (Nombre Legal) *</label>
+              <input type="text" id="emp-razon-social" class="form-input" style="padding-left:0.75rem;" placeholder="Ej: Saint Inversiones S.A." required>
+            </div>
+
+            <div style="display:grid; grid-template-columns: 1fr 1fr; gap:1rem;">
+              <div class="form-group">
+                <label for="emp-nombre-comercial">Nombre Comercial (Opcional)</label>
+                <input type="text" id="emp-nombre-comercial" class="form-input" style="padding-left:0.75rem;" placeholder="Ej: Inversiones Saint">
+              </div>
+              <div class="form-group">
+                <label for="emp-tipo">Tipo de Empresa *</label>
+                <select id="emp-tipo" class="form-input" style="padding-left:0.75rem;" required>
+                  <option value="S.A.">S.A. (Sociedad Anónima)</option>
+                  <option value="S.R.L.">S.R.L. (Sociedad de Resp. Limitada)</option>
+                  <option value="Autónomo">Autónomo / Firma Personal</option>
+                  <option value="C.A.">C.A. (Compañía Anónima)</option>
+                  <option value="Cooperativa">Cooperativa</option>
+                  <option value="Otro">Otro</option>
+                </select>
+              </div>
+            </div>
+
+            <div style="display:grid; grid-template-columns: 1fr 1fr; gap:1rem;">
+              <div class="form-group">
+                <label for="emp-rif">Identificación Fiscal (RIF/NIT) *</label>
+                <input type="text" id="emp-rif" class="form-input" style="padding-left:0.75rem;" placeholder="Ej: J-12345678-9" required>
+              </div>
+              <div class="form-group">
+                <label for="emp-pais">País *</label>
+                <input type="text" id="emp-pais" class="form-input" style="padding-left:0.75rem;" placeholder="Ej: Venezuela" required>
+              </div>
+            </div>
+
+            <div style="display:grid; grid-template-columns: 1fr 1fr 1fr; gap:1rem;">
+              <div class="form-group">
+                <label for="emp-estado">Estado / Provincia *</label>
+                <input type="text" id="emp-estado" class="form-input" style="padding-left:0.75rem;" placeholder="Ej: Miranda" required>
+              </div>
+              <div class="form-group">
+                <label for="emp-ciudad">Ciudad *</label>
+                <input type="text" id="emp-ciudad" class="form-input" style="padding-left:0.75rem;" placeholder="Ej: Caracas" required>
+              </div>
+              <div class="form-group">
+                <label for="emp-codigo-postal">Código Postal *</label>
+                <input type="text" id="emp-codigo-postal" class="form-input" style="padding-left:0.75rem;" placeholder="Ej: 1060" required>
+              </div>
+            </div>
+
+            <div class="form-group">
+              <label for="emp-direccion">Dirección Fiscal Completa *</label>
+              <textarea id="emp-direccion" class="form-input" style="padding:0.5rem 0.75rem; height: 60px; resize: none;" placeholder="Ej: Calle Principal, Local 5, Edificio Saint..." required></textarea>
+            </div>
+
+            <button type="submit" class="btn btn-primary-action" style="margin-top:1rem; width:100%;">
+              <i data-lucide="plus-circle" style="width:16px; height:16px;"></i> Crear Empresa
+            </button>
+          </form>
+        </div>
+      </div>
+    </div>
+  `;
+
+  document.getElementById('create-company-form').addEventListener('submit', handleCreateCompany);
+}
+
+function handleSwitchCompany(companyId) {
+  db.setActiveCompany(companyId);
+  updateCompanyHeader();
+  showToast('Empresa cambiada con éxito', 'success');
+  navigateTo('empresas');
+}
+
+function handleCreateCompany(e) {
+  e.preventDefault();
+  const razonSocial = document.getElementById('emp-razon-social').value.trim();
+  const nombreComercial = document.getElementById('emp-nombre-comercial').value.trim();
+  const tipo = document.getElementById('emp-tipo').value;
+  const pais = document.getElementById('emp-pais').value.trim();
+  const estado = document.getElementById('emp-estado').value.trim();
+  const ciudad = document.getElementById('emp-ciudad').value.trim();
+  const direccion = document.getElementById('emp-direccion').value.trim();
+  const codigoPostal = document.getElementById('emp-codigo-postal').value.trim();
+  const rif = document.getElementById('emp-rif').value.trim();
+
+  const newCompany = {
+    id: 'emp_' + Date.now(),
+    razonSocial,
+    nombreComercial,
+    tipoEmpresa: tipo,
+    pais,
+    estado,
+    ciudad,
+    direccionFiscal: direccion,
+    codigoPostal,
+    rif
+  };
+
+  db.saveCompany(newCompany);
+  db.setActiveCompany(newCompany.id);
+  updateCompanyHeader();
+  showToast(`Empresa "${razonSocial}" creada con éxito`, 'success');
+  navigateTo('empresas');
+}
+
+// 10. CONFIGURACIÓN
 function renderConfiguracionView(container) {
   const settings = db.getSettings();
 

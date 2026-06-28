@@ -10,7 +10,9 @@ const DB_KEYS = {
   USERS: 'saint_users',
   AUDIT_LOGS: 'saint_audit_logs',
   SESSION: 'saint_session',
-  SETTINGS: 'saint_settings'
+  SETTINGS: 'saint_settings',
+  COMPANIES: 'saint_companies',
+  ACTIVE_COMPANY_ID: 'saint_active_company_id'
 };
 
 // Datos por defecto para inicialización
@@ -105,7 +107,7 @@ const DEFAULT_ENTRIES = [
 ];
 
 const DEFAULT_SETTINGS = {
-  companyName: 'Saint Contable Demo S.A.',
+  companyName: 'Sistema Contable Farro F.P',
   fiscalRif: 'J-12345678-9',
   fiscalYear: 2026,
   periodOpen: true
@@ -117,31 +119,117 @@ const DEFAULT_AUDIT_LOGS = [
 
 // Helper base de datos
 const DB = {
-  init() {
-    if (!localStorage.getItem(DB_KEYS.ACCOUNTS)) {
-      localStorage.setItem(DB_KEYS.ACCOUNTS, JSON.stringify(DEFAULT_ACCOUNTS));
+  getCompanies() {
+    if (!localStorage.getItem('saint_companies')) {
+      localStorage.setItem('saint_companies', JSON.stringify([]));
     }
+    return JSON.parse(localStorage.getItem('saint_companies')) || [];
+  },
+
+  saveCompany(company) {
+    const companies = this.getCompanies();
+    const idx = companies.findIndex(c => c.id === company.id);
+    if (idx > -1) {
+      companies[idx] = company;
+    } else {
+      companies.push(company);
+    }
+    localStorage.setItem('saint_companies', JSON.stringify(companies));
+  },
+
+  getActiveCompanyId() {
+    let activeId = localStorage.getItem(DB_KEYS.ACTIVE_COMPANY_ID || 'saint_active_company_id');
+    if (!activeId) {
+      const companies = this.getCompanies();
+      if (companies.length > 0) {
+        activeId = companies[0].id;
+      } else {
+        const defaultCompany = {
+          id: 'default',
+          razonSocial: 'Sistema Contable Farro F.P',
+          nombreComercial: 'Farro F.P',
+          tipoEmpresa: 'Autónomo',
+          pais: 'Venezuela',
+          estado: 'Distrito Capital',
+          ciudad: 'Caracas',
+          direccionFiscal: 'Av. Francisco de Miranda, Torre Saint',
+          codigoPostal: '1060',
+          rif: 'J-12345678-9'
+        };
+        this.saveCompany(defaultCompany);
+        activeId = 'default';
+      }
+      localStorage.setItem('saint_active_company_id', activeId);
+    }
+    return activeId;
+  },
+
+  setActiveCompany(id) {
+    localStorage.setItem('saint_active_company_id', id);
+    this.init();
+  },
+
+  getActiveCompany() {
+    const activeId = this.getActiveCompanyId();
+    return this.getCompanies().find(c => c.id === activeId);
+  },
+
+  getCompanyKey(baseKey) {
+    if (baseKey === DB_KEYS.USERS || baseKey === DB_KEYS.SESSION || baseKey === 'saint_companies') {
+      return baseKey;
+    }
+    const companyId = this.getActiveCompanyId();
+    if (companyId === 'default') {
+      return baseKey;
+    }
+    return `${baseKey}_${companyId}`;
+  },
+
+  init() {
     if (!localStorage.getItem(DB_KEYS.USERS)) {
       localStorage.setItem(DB_KEYS.USERS, JSON.stringify(DEFAULT_USERS));
     }
-    if (!localStorage.getItem(DB_KEYS.ENTRIES)) {
-      localStorage.setItem(DB_KEYS.ENTRIES, JSON.stringify(DEFAULT_ENTRIES));
+    
+    const activeId = this.getActiveCompanyId();
+    const accountKey = this.getCompanyKey(DB_KEYS.ACCOUNTS);
+    const entriesKey = this.getCompanyKey(DB_KEYS.ENTRIES);
+    const settingsKey = this.getCompanyKey(DB_KEYS.SETTINGS);
+    const auditLogsKey = this.getCompanyKey(DB_KEYS.AUDIT_LOGS);
+
+    if (!localStorage.getItem(accountKey)) {
+      localStorage.setItem(accountKey, JSON.stringify(DEFAULT_ACCOUNTS));
     }
-    if (!localStorage.getItem(DB_KEYS.SETTINGS)) {
-      localStorage.setItem(DB_KEYS.SETTINGS, JSON.stringify(DEFAULT_SETTINGS));
+    if (!localStorage.getItem(entriesKey)) {
+      const initialEntries = activeId === 'default' ? DEFAULT_ENTRIES : [];
+      localStorage.setItem(entriesKey, JSON.stringify(initialEntries));
     }
-    if (!localStorage.getItem(DB_KEYS.AUDIT_LOGS)) {
-      localStorage.setItem(DB_KEYS.AUDIT_LOGS, JSON.stringify(DEFAULT_AUDIT_LOGS));
+    if (!localStorage.getItem(settingsKey)) {
+      const company = this.getCompanies().find(c => c.id === activeId);
+      const initialSettings = {
+        companyName: company ? company.razonSocial : DEFAULT_SETTINGS.companyName,
+        fiscalRif: company ? (company.rif || 'J-00000000-0') : DEFAULT_SETTINGS.fiscalRif,
+        fiscalYear: new Date().getFullYear(),
+        periodOpen: true
+      };
+      localStorage.setItem(settingsKey, JSON.stringify(initialSettings));
+    }
+    if (!localStorage.getItem(auditLogsKey)) {
+      const initialAudit = [
+        { timestamp: new Date().toISOString(), username: 'sistema', action: 'Inicialización de Empresa', details: 'Configuración inicial y catálogo cargado' }
+      ];
+      localStorage.setItem(auditLogsKey, JSON.stringify(initialAudit));
     }
   },
 
   getData(key) {
     this.init();
-    return JSON.parse(localStorage.getItem(key));
+    const targetKey = this.getCompanyKey(key);
+    return JSON.parse(localStorage.getItem(targetKey));
   },
 
   setData(key, val) {
-    localStorage.setItem(key, JSON.stringify(val));
+    const targetKey = this.getCompanyKey(key);
+    localStorage.setItem(targetKey, JSON.stringify(val));
   },
 
   // Auditoría
